@@ -11,8 +11,6 @@
       --ground: #ded895;
       --pipe: #4caf50;
       --pipe-dark: #2e7d32;
-      --bird: #ffb703;
-      --bird-wing: #fb8500;
       --text: #123;
     }
 
@@ -27,10 +25,7 @@
       color: var(--text);
     }
 
-    .wrap {
-      width: min(92vw, 480px);
-    }
-
+    .wrap { width: min(92vw, 480px); }
     .title {
       display: flex;
       justify-content: space-between;
@@ -61,7 +56,7 @@
 <body>
   <div class="wrap">
     <div class="title">
-      <div>🦞 Flappy Lob</div>
+      <div id="titleLabel">🦞 Flappy Lob</div>
       <div id="bestLabel">Best: 0</div>
     </div>
     <canvas id="game" width="420" height="680"></canvas>
@@ -69,9 +64,49 @@
   </div>
 
   <script>
+    const CHARACTERS = {
+      bird: {
+        key: 'bird',
+        emoji: '🐤',
+        name: 'Bird',
+        title: 'Flappy Bird',
+        bestKey: 'flappyLobBest_bird',
+        radius: 18,
+        mode: 'drawn',
+        body: '#ffb703',
+        wing: '#fb8500',
+        beak: '#ff6d00'
+      },
+      kelvin: {
+        key: 'kelvin',
+        emoji: '😎',
+        name: 'Kelvin',
+        title: 'Flappy Kelvin',
+        bestKey: 'flappyLobBest_kelvin',
+        radius: 26,
+        mode: 'image',
+        src: './assets/kelvin.jpg',
+        wing: '#ff7b54',
+        beak: '#ffd166'
+      },
+      cat: {
+        key: 'cat',
+        emoji: '🐱',
+        name: 'Cat',
+        title: 'Flappy Cat',
+        bestKey: 'flappyLobBest_cat',
+        radius: 26,
+        mode: 'image',
+        src: './assets/cat.jpg',
+        wing: '#ffd166',
+        beak: '#ff9f1c'
+      }
+    };
+
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const bestLabel = document.getElementById('bestLabel');
+    const titleLabel = document.getElementById('titleLabel');
 
     const W = canvas.width;
     const H = canvas.height;
@@ -83,15 +118,24 @@
     const FLAP = -7.2;
     const SCROLL = 2.7;
 
-    let best = Number(localStorage.getItem('flappyLobBest') || 0);
-    bestLabel.textContent = `Best: ${best}`;
+    const sprites = {};
+    for (const char of Object.values(CHARACTERS)) {
+      if (char.mode === 'image') {
+        const img = new Image();
+        img.src = char.src;
+        sprites[char.key] = img;
+      }
+    }
 
     const state = {
-      mode: 'ready',
+      mode: 'menu',
       score: 0,
       time: 0,
       lastPipe: 0,
       pipes: [],
+      selectedCharacter: 'bird',
+      best: 0,
+      menuButtons: [],
       bird: {
         x: 110,
         y: H / 2 - 40,
@@ -101,8 +145,20 @@
       groundOffset: 0,
     };
 
-    function reset() {
-      state.mode = 'ready';
+    function currentCharacter() {
+      return CHARACTERS[state.selectedCharacter];
+    }
+
+    function refreshLabels() {
+      const char = currentCharacter();
+      state.best = Number(localStorage.getItem(char.bestKey) || 0);
+      bestLabel.textContent = `Best: ${state.best}`;
+      titleLabel.textContent = `${char.emoji} ${char.title}`;
+      state.bird.r = char.radius;
+    }
+
+    function reset(toMenu = false) {
+      state.mode = toMenu ? 'menu' : 'ready';
       state.score = 0;
       state.time = 0;
       state.lastPipe = 0;
@@ -111,6 +167,26 @@
       state.bird.x = 110;
       state.bird.y = H / 2 - 40;
       state.bird.vy = 0;
+      state.bird.r = currentCharacter().radius;
+      refreshLabels();
+    }
+
+    function startGame() {
+      state.mode = 'playing';
+      state.score = 0;
+      state.time = 0;
+      state.lastPipe = 0;
+      state.pipes = [];
+      state.groundOffset = 0;
+      state.bird.x = 110;
+      state.bird.y = H / 2 - 40;
+      state.bird.vy = FLAP;
+      state.bird.r = currentCharacter().radius;
+    }
+
+    function setCharacter(key) {
+      state.selectedCharacter = key;
+      refreshLabels();
     }
 
     function spawnPipe() {
@@ -121,11 +197,15 @@
     }
 
     function flap() {
+      if (state.mode === 'menu') return;
       if (state.mode === 'ready') {
-        state.mode = 'playing';
-      } else if (state.mode === 'gameover') {
-        reset();
-        state.mode = 'playing';
+        startGame();
+        return;
+      }
+      if (state.mode === 'gameover') {
+        reset(false);
+        startGame();
+        return;
       }
       state.bird.vy = FLAP;
     }
@@ -160,10 +240,10 @@
         if (!pipe.passed && pipe.x + PIPE_W < bird.x) {
           pipe.passed = true;
           state.score += 1;
-          if (state.score > best) {
-            best = state.score;
-            localStorage.setItem('flappyLobBest', best);
-            bestLabel.textContent = `Best: ${best}`;
+          if (state.score > state.best) {
+            state.best = state.score;
+            localStorage.setItem(currentCharacter().bestKey, state.best);
+            bestLabel.textContent = `Best: ${state.best}`;
           }
         }
         if (hitPipe(pipe, bird)) {
@@ -185,8 +265,6 @@
 
     function drawBackground() {
       ctx.clearRect(0, 0, W, H);
-
-      // clouds
       ctx.fillStyle = 'rgba(255,255,255,.8)';
       for (let i = 0; i < 4; i++) {
         const x = ((state.time * 0.02 + i * 120) % (W + 120)) - 60;
@@ -217,7 +295,6 @@
       ctx.fillRect(x + w - 10, y, 10, h);
       ctx.fillStyle = '#66bb6a';
       ctx.fillRect(x, y, 10, h);
-
       const lipH = 18;
       const lipY = top ? h - lipH : y;
       ctx.fillStyle = '#43a047';
@@ -226,40 +303,93 @@
       ctx.fillRect(x + w - 2, lipY, 6, lipH);
     }
 
+    function drawCharacterPreview(x, y, scale, key) {
+      const char = CHARACTERS[key];
+      ctx.save();
+      ctx.translate(x, y);
+      if (char.mode === 'image' && sprites[key]?.complete && sprites[key].naturalWidth) {
+        const r = 26 * scale;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        const size = r * 2.25;
+        ctx.drawImage(sprites[key], -size / 2, -size / 2, size, size);
+      } else {
+        const r = 18 * scale;
+        ctx.fillStyle = char.body || '#ffb703';
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = char.wing || '#fb8500';
+        ctx.beginPath();
+        ctx.ellipse(-4 * scale, 3 * scale, 10 * scale, 6 * scale, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     function drawBird() {
       const b = state.bird;
+      const char = currentCharacter();
       const angle = Math.max(-0.6, Math.min(1.1, b.vy / 10));
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(angle);
 
-      ctx.fillStyle = '#ffb703';
-      ctx.beginPath();
-      ctx.arc(0, 0, b.r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#fb8500';
-      ctx.beginPath();
-      ctx.ellipse(-4, 3, 10, 6, -0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(6, -6, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#111';
-      ctx.beginPath();
-      ctx.arc(8, -6, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#ff6d00';
-      ctx.beginPath();
-      ctx.moveTo(14, 0);
-      ctx.lineTo(28, -4);
-      ctx.lineTo(14, 6);
-      ctx.closePath();
-      ctx.fill();
+      if (char.mode === 'image' && sprites[char.key]?.complete && sprites[char.key].naturalWidth) {
+        ctx.fillStyle = 'rgba(255,255,255,.2)';
+        ctx.beginPath();
+        ctx.arc(0, 0, b.r + 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        const size = b.r * 2.25;
+        ctx.drawImage(sprites[char.key], -size / 2, -size / 2, size, size);
+        ctx.restore();
+        ctx.fillStyle = 'rgba(255,255,255,.6)';
+        ctx.beginPath();
+        ctx.arc(-8, -9, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = char.wing;
+        ctx.beginPath();
+        ctx.ellipse(-10, 7, 11, 7, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = char.beak;
+        ctx.beginPath();
+        ctx.moveTo(b.r - 2, 1);
+        ctx.lineTo(b.r + 13, -4);
+        ctx.lineTo(b.r + 13, 6);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillStyle = char.body;
+        ctx.beginPath();
+        ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = char.wing;
+        ctx.beginPath();
+        ctx.ellipse(-4, 3, 10, 6, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(6, -6, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(8, -6, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = char.beak;
+        ctx.beginPath();
+        ctx.moveTo(14, 0);
+        ctx.lineTo(28, -4);
+        ctx.lineTo(14, 6);
+        ctx.closePath();
+        ctx.fill();
+      }
 
       ctx.restore();
     }
@@ -286,31 +416,7 @@
       ctx.fillText(String(state.score), W / 2, 78);
     }
 
-    function drawOverlay() {
-      ctx.textAlign = 'center';
-      if (state.mode === 'ready') {
-        roundedRect(40, 210, W - 80, 140, 18, 'rgba(255,255,255,.82)');
-        ctx.fillStyle = '#123';
-        ctx.font = 'bold 34px Arial';
-        ctx.fillText('Flappy Lob', W/2, 258);
-        ctx.font = '20px Arial';
-        ctx.fillText('Tap, click, or press space to start', W/2, 302);
-      }
-      if (state.mode === 'gameover') {
-        roundedRect(50, 190, W - 100, 180, 18, 'rgba(255,255,255,.88)');
-        ctx.fillStyle = '#123';
-        ctx.font = 'bold 34px Arial';
-        ctx.fillText('Game Over', W/2, 238);
-        ctx.font = '24px Arial';
-        ctx.fillText(`Score: ${state.score}`, W/2, 284);
-        ctx.fillText(`Best: ${best}`, W/2, 318);
-        ctx.font = '18px Arial';
-        ctx.fillText('Tap / click / space to restart', W/2, 352);
-      }
-    }
-
-    function roundedRect(x, y, w, h, r, fill) {
-      ctx.fillStyle = fill;
+    function roundedRect(x, y, w, h, r, fill, stroke = null) {
       ctx.beginPath();
       ctx.moveTo(x+r, y);
       ctx.arcTo(x+w, y, x+w, y+h, r);
@@ -318,16 +424,99 @@
       ctx.arcTo(x, y+h, x, y, r);
       ctx.arcTo(x, y, x+w, y, r);
       ctx.closePath();
+      ctx.fillStyle = fill;
       ctx.fill();
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    function drawMenu() {
+      roundedRect(30, 120, W - 60, 350, 24, 'rgba(255,255,255,.86)');
+      ctx.fillStyle = '#123';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 36px Arial';
+      ctx.fillText('Choose your flier', W / 2, 170);
+      ctx.font = '18px Arial';
+      ctx.fillText('Pick a character, then start the game', W / 2, 200);
+
+      state.menuButtons = [];
+      const charKeys = ['bird', 'kelvin', 'cat'];
+      charKeys.forEach((key, i) => {
+        const x = 55 + i * 116;
+        const y = 235;
+        const w = 90;
+        const h = 112;
+        const selected = state.selectedCharacter === key;
+        roundedRect(x, y, w, h, 18, selected ? 'rgba(112,197,206,.28)' : 'rgba(255,255,255,.95)', selected ? '#3a86a8' : 'rgba(0,0,0,.08)');
+        drawCharacterPreview(x + w / 2, y + 42, 0.95, key);
+        ctx.fillStyle = '#123';
+        ctx.font = 'bold 18px Arial';
+        ctx.fillText(CHARACTERS[key].name, x + w / 2, y + 92);
+        state.menuButtons.push({ type: 'character', key, x, y, w, h });
+      });
+
+      const startBtn = { x: 85, y: 380, w: W - 170, h: 62 };
+      roundedRect(startBtn.x, startBtn.y, startBtn.w, startBtn.h, 18, '#43a047');
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 26px Arial';
+      ctx.fillText('Start Game', W / 2, 420);
+      state.menuButtons.push({ type: 'start', ...startBtn });
+    }
+
+    function drawOverlay() {
+      ctx.textAlign = 'center';
+      if (state.mode === 'menu') {
+        drawMenu();
+      }
+      if (state.mode === 'ready') {
+        roundedRect(40, 210, W - 80, 140, 18, 'rgba(255,255,255,.82)');
+        ctx.fillStyle = '#123';
+        ctx.font = 'bold 34px Arial';
+        ctx.fillText(currentCharacter().title, W/2, 258);
+        ctx.font = '20px Arial';
+        ctx.fillText('Tap, click, or press space to start', W/2, 302);
+      }
+      if (state.mode === 'gameover') {
+        roundedRect(50, 190, W - 100, 210, 18, 'rgba(255,255,255,.88)');
+        ctx.fillStyle = '#123';
+        ctx.font = 'bold 34px Arial';
+        ctx.fillText('Game Over', W/2, 238);
+        ctx.font = '24px Arial';
+        ctx.fillText(`Score: ${state.score}`, W/2, 284);
+        ctx.fillText(`Best: ${state.best}`, W/2, 318);
+        ctx.font = '18px Arial';
+        ctx.fillText('Tap / click / space to restart', W/2, 352);
+        ctx.fillText('Character select is available on reload', W/2, 380);
+      }
     }
 
     function draw() {
       drawBackground();
       drawPipes();
       drawGround();
-      drawBird();
-      drawScore();
+      if (state.mode !== 'menu') drawBird();
+      if (state.mode === 'playing') drawScore();
       drawOverlay();
+    }
+
+    function handleMenuClick(px, py) {
+      for (const btn of state.menuButtons) {
+        if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
+          if (btn.type === 'character') {
+            setCharacter(btn.key);
+            return true;
+          }
+          if (btn.type === 'start') {
+            reset(false);
+            startGame();
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
     let last = performance.now();
@@ -342,12 +531,32 @@
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        flap();
+        if (state.mode === 'menu') {
+          reset(false);
+          startGame();
+        } else {
+          flap();
+        }
+      }
+      if (state.mode === 'menu') {
+        if (e.key === '1') setCharacter('bird');
+        if (e.key === '2') setCharacter('kelvin');
+        if (e.key === '3') setCharacter('cat');
       }
     });
-    canvas.addEventListener('pointerdown', flap);
 
-    reset();
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+      if (state.mode === 'menu') {
+        handleMenuClick(px, py);
+        return;
+      }
+      flap();
+    });
+
+    reset(true);
     requestAnimationFrame(loop);
   </script>
 </body>
