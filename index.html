@@ -9,11 +9,8 @@
       --bg1: #70c5ce;
       --bg2: #c7f0ff;
       --ground: #ded895;
-      --pipe: #4caf50;
-      --pipe-dark: #2e7d32;
       --text: #123;
     }
-
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -24,7 +21,6 @@
       font-family: Arial, Helvetica, sans-serif;
       color: var(--text);
     }
-
     .wrap { width: min(92vw, 480px); }
     .title {
       display: flex;
@@ -33,7 +29,6 @@
       margin-bottom: 10px;
       font-weight: 700;
     }
-
     canvas {
       width: 100%;
       height: auto;
@@ -44,13 +39,7 @@
       touch-action: manipulation;
       cursor: pointer;
     }
-
-    .hint {
-      margin-top: 10px;
-      opacity: .8;
-      font-size: 14px;
-      text-align: center;
-    }
+    .hint { margin-top: 10px; opacity: .8; font-size: 14px; text-align: center; }
   </style>
 </head>
 <body>
@@ -66,40 +55,20 @@
   <script>
     const CHARACTERS = {
       bird: {
-        key: 'bird',
-        emoji: '🐤',
-        name: 'Bird',
-        title: 'Flappy Bird',
-        bestKey: 'flappyLobBest_bird',
-        radius: 18,
-        mode: 'drawn',
-        body: '#ffb703',
-        wing: '#fb8500',
-        beak: '#ff6d00'
+        key: 'bird', emoji: '🐤', name: 'Bird', title: 'Flappy Bird', bestKey: 'flappyLobBest_bird',
+        radius: 18, mode: 'drawn', body: '#ffb703', wing: '#fb8500', beak: '#ff6d00'
       },
       kelvin: {
-        key: 'kelvin',
-        emoji: '😎',
-        name: 'Kelvin',
-        title: 'Flappy Kelvin',
-        bestKey: 'flappyLobBest_kelvin',
-        radius: 26,
-        mode: 'image',
-        src: './kelvin.jpg',
-        wing: '#ff7b54',
-        beak: '#ffd166'
+        key: 'kelvin', emoji: '😎', name: 'Kelvin', title: 'Flappy Kelvin', bestKey: 'flappyLobBest_kelvin',
+        radius: 28, mode: 'cutout', src: './kelvin.jpg', wingMain: '#e9d7a2', wingLight: '#fff0bf', wingLine: '#e0c985',
+        clip: [[-16,-40],[-2,-54],[20,-52],[34,-36],[40,-10],[36,18],[22,42],[0,54],[-22,44],[-36,18],[-42,-10],[-34,-34]],
+        imageScale: 1.42, imageOffsetX: 0, imageOffsetY: 4
       },
       cat: {
-        key: 'cat',
-        emoji: '🐱',
-        name: 'Cat',
-        title: 'Flappy Cat',
-        bestKey: 'flappyLobBest_cat',
-        radius: 26,
-        mode: 'image',
-        src: './cat.jpg',
-        wing: '#ffd166',
-        beak: '#ff9f1c'
+        key: 'cat', emoji: '🐱', name: 'Cat', title: 'Flappy Cat', bestKey: 'flappyLobBest_cat',
+        radius: 29, mode: 'cutout', src: './cat-clean.jpg', wingMain: '#ead49b', wingLight: '#fff1c3', wingLine: '#debf76',
+        clip: [[-28,-8],[-24,-34],[-14,-52],[-2,-36],[8,-22],[18,-36],[30,-52],[40,-34],[44,-8],[40,16],[28,34],[10,46],[-10,46],[-28,34],[-40,16]],
+        imageScale: 1.58, imageOffsetX: 0, imageOffsetY: -4
       }
     };
 
@@ -107,20 +76,12 @@
     const ctx = canvas.getContext('2d');
     const bestLabel = document.getElementById('bestLabel');
     const titleLabel = document.getElementById('titleLabel');
-
-    const W = canvas.width;
-    const H = canvas.height;
-    const GROUND_H = 110;
-    const PIPE_W = 72;
-    const PIPE_GAP = 170;
-    const PIPE_INTERVAL = 1500;
-    const GRAVITY = 0.42;
-    const FLAP = -7.2;
-    const SCROLL = 2.7;
+    const W = canvas.width, H = canvas.height;
+    const GROUND_H = 110, PIPE_W = 72, PIPE_GAP = 170, PIPE_INTERVAL = 1500, GRAVITY = 0.42, FLAP = -7.2, SCROLL = 2.7;
 
     const sprites = {};
     for (const char of Object.values(CHARACTERS)) {
-      if (char.mode === 'image') {
+      if (char.mode !== 'drawn') {
         const img = new Image();
         img.src = char.src;
         sprites[char.key] = img;
@@ -128,27 +89,21 @@
     }
 
     const state = {
-      mode: 'menu',
-      score: 0,
-      time: 0,
-      lastPipe: 0,
-      pipes: [],
-      selectedCharacter: 'bird',
-      best: 0,
-      menuButtons: [],
-      bird: {
-        x: 110,
-        y: H / 2 - 40,
-        vy: 0,
-        r: 18,
-      },
-      groundOffset: 0,
+      mode: 'menu', score: 0, time: 0, lastPipe: 0, pipes: [], selectedCharacter: 'bird', best: 0, menuButtons: [],
+      bird: { x: 110, y: H/2-40, vy: 0, r: 18 }, groundOffset: 0,
     };
 
-    function currentCharacter() {
-      return CHARACTERS[state.selectedCharacter];
-    }
+    const wingBase = [[-56,4],[-36,-18],[-8,-24],[12,-8],[2,2],[18,18],[-10,28],[-30,28]];
+    const wingInner = [[-44,4],[-28,-10],[-6,-14],[8,-6],[2,4],[12,14],[-6,18],[-24,18]];
 
+    function scaledPoints(points, scale=1) { return points.map(([x,y]) => [x*scale, y*scale]); }
+    function drawPolygon(points) {
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+      ctx.closePath();
+    }
+    function currentCharacter() { return CHARACTERS[state.selectedCharacter]; }
     function refreshLabels() {
       const char = currentCharacter();
       state.best = Number(localStorage.getItem(char.bestKey) || 0);
@@ -156,408 +111,143 @@
       titleLabel.textContent = `${char.emoji} ${char.title}`;
       state.bird.r = char.radius;
     }
-
-    function reset(toMenu = false) {
+    function reset(toMenu=false) {
       state.mode = toMenu ? 'menu' : 'ready';
-      state.score = 0;
-      state.time = 0;
-      state.lastPipe = 0;
-      state.pipes = [];
-      state.groundOffset = 0;
-      state.bird.x = 110;
-      state.bird.y = H / 2 - 40;
-      state.bird.vy = 0;
-      state.bird.r = currentCharacter().radius;
-      refreshLabels();
+      state.score = 0; state.time = 0; state.lastPipe = 0; state.pipes = []; state.groundOffset = 0;
+      state.bird.x = 110; state.bird.y = H/2-40; state.bird.vy = 0; state.bird.r = currentCharacter().radius; refreshLabels();
     }
-
     function startGame() {
-      state.mode = 'playing';
-      state.score = 0;
-      state.time = 0;
-      state.lastPipe = 0;
-      state.pipes = [];
-      state.groundOffset = 0;
-      state.bird.x = 110;
-      state.bird.y = H / 2 - 40;
-      state.bird.vy = FLAP;
-      state.bird.r = currentCharacter().radius;
+      state.mode = 'playing'; state.score = 0; state.time = 0; state.lastPipe = 0; state.pipes = []; state.groundOffset = 0;
+      state.bird.x = 110; state.bird.y = H/2-40; state.bird.vy = FLAP; state.bird.r = currentCharacter().radius;
     }
-
-    function setCharacter(key) {
-      state.selectedCharacter = key;
-      refreshLabels();
-    }
-
+    function setCharacter(key) { state.selectedCharacter = key; refreshLabels(); }
     function spawnPipe() {
-      const minTop = 90;
-      const maxTop = H - GROUND_H - PIPE_GAP - 90;
-      const top = minTop + Math.random() * (maxTop - minTop);
-      state.pipes.push({ x: W + 20, top, passed: false });
+      const minTop = 90, maxTop = H - GROUND_H - PIPE_GAP - 90;
+      state.pipes.push({ x: W + 20, top: minTop + Math.random()*(maxTop-minTop), passed: false });
     }
-
     function flap() {
       if (state.mode === 'menu') return;
-      if (state.mode === 'ready') {
-        startGame();
-        return;
-      }
-      if (state.mode === 'gameover') {
-        reset(false);
-        startGame();
-        return;
-      }
+      if (state.mode === 'ready') return startGame();
+      if (state.mode === 'gameover') { reset(false); return startGame(); }
       state.bird.vy = FLAP;
     }
-
     function hitPipe(pipe, bird) {
-      const bx = bird.x;
-      const by = bird.y;
-      const r = bird.r;
-      const inPipeX = bx + r > pipe.x && bx - r < pipe.x + PIPE_W;
-      const hitsTop = by - r < pipe.top;
-      const hitsBottom = by + r > pipe.top + PIPE_GAP;
-      return inPipeX && (hitsTop || hitsBottom);
+      const bx=bird.x, by=bird.y, r=bird.r;
+      const inPipeX = bx+r > pipe.x && bx-r < pipe.x+PIPE_W;
+      return inPipeX && ((by-r < pipe.top) || (by+r > pipe.top+PIPE_GAP));
     }
-
     function update(dt) {
-      state.time += dt;
-      state.groundOffset = (state.groundOffset + SCROLL) % 32;
-
+      state.time += dt; state.groundOffset = (state.groundOffset + SCROLL) % 32;
       if (state.mode !== 'playing') return;
-
-      const bird = state.bird;
-      bird.vy += GRAVITY;
-      bird.y += bird.vy;
-
-      if (state.time - state.lastPipe > PIPE_INTERVAL) {
-        state.lastPipe = state.time;
-        spawnPipe();
-      }
-
+      const bird = state.bird; bird.vy += GRAVITY; bird.y += bird.vy;
+      if (state.time - state.lastPipe > PIPE_INTERVAL) { state.lastPipe = state.time; spawnPipe(); }
       for (const pipe of state.pipes) {
         pipe.x -= SCROLL;
         if (!pipe.passed && pipe.x + PIPE_W < bird.x) {
-          pipe.passed = true;
-          state.score += 1;
+          pipe.passed = true; state.score += 1;
           if (state.score > state.best) {
-            state.best = state.score;
-            localStorage.setItem(currentCharacter().bestKey, state.best);
-            bestLabel.textContent = `Best: ${state.best}`;
+            state.best = state.score; localStorage.setItem(currentCharacter().bestKey, state.best); bestLabel.textContent = `Best: ${state.best}`;
           }
         }
-        if (hitPipe(pipe, bird)) {
-          state.mode = 'gameover';
-        }
+        if (hitPipe(pipe, bird)) state.mode = 'gameover';
       }
-
       state.pipes = state.pipes.filter(p => p.x + PIPE_W > -10);
-
-      if (bird.y + bird.r >= H - GROUND_H) {
-        bird.y = H - GROUND_H - bird.r;
-        state.mode = 'gameover';
-      }
-      if (bird.y - bird.r <= 0) {
-        bird.y = bird.r;
-        bird.vy = 0;
-      }
+      if (bird.y + bird.r >= H - GROUND_H) { bird.y = H - GROUND_H - bird.r; state.mode = 'gameover'; }
+      if (bird.y - bird.r <= 0) { bird.y = bird.r; bird.vy = 0; }
     }
 
-    function drawBackground() {
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(255,255,255,.8)';
-      for (let i = 0; i < 4; i++) {
-        const x = ((state.time * 0.02 + i * 120) % (W + 120)) - 60;
-        const y = 70 + i * 40;
-        cloud(x, y, 1 + (i % 2) * .2);
-      }
-    }
+    function cloud(x,y,s=1){ ctx.beginPath(); ctx.arc(x,y,18*s,0,Math.PI*2); ctx.arc(x+18*s,y-10*s,22*s,0,Math.PI*2); ctx.arc(x+42*s,y,18*s,0,Math.PI*2); ctx.fill(); }
+    function drawBackground(){ ctx.clearRect(0,0,W,H); ctx.fillStyle='rgba(255,255,255,.8)'; for(let i=0;i<4;i++){ const x=((state.time*0.02+i*120)%(W+120))-60; const y=70+i*40; cloud(x,y,1+(i%2)*.2);} }
+    function drawPipe(x,y,w,h,top){ ctx.fillStyle='#4caf50'; ctx.fillRect(x,y,w,h); ctx.fillStyle='#2e7d32'; ctx.fillRect(x+w-10,y,10,h); ctx.fillStyle='#66bb6a'; ctx.fillRect(x,y,10,h); const lipH=18, lipY=top?h-lipH:y; ctx.fillStyle='#43a047'; ctx.fillRect(x-4,lipY,w+8,lipH); ctx.fillStyle='#2e7d32'; ctx.fillRect(x+w-2,lipY,6,lipH); }
+    function drawPipes(){ for(const p of state.pipes){ drawPipe(p.x,0,PIPE_W,p.top,true); drawPipe(p.x,p.top+PIPE_GAP,PIPE_W,H-GROUND_H-(p.top+PIPE_GAP),false); } }
 
-    function cloud(x, y, s=1) {
-      ctx.beginPath();
-      ctx.arc(x, y, 18*s, 0, Math.PI*2);
-      ctx.arc(x+18*s, y-10*s, 22*s, 0, Math.PI*2);
-      ctx.arc(x+42*s, y, 18*s, 0, Math.PI*2);
-      ctx.fill();
-    }
-
-    function drawPipes() {
-      for (const p of state.pipes) {
-        drawPipe(p.x, 0, PIPE_W, p.top, true);
-        drawPipe(p.x, p.top + PIPE_GAP, PIPE_W, H - GROUND_H - (p.top + PIPE_GAP), false);
-      }
-    }
-
-    function drawPipe(x, y, w, h, top) {
-      ctx.fillStyle = '#4caf50';
-      ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = '#2e7d32';
-      ctx.fillRect(x + w - 10, y, 10, h);
-      ctx.fillStyle = '#66bb6a';
-      ctx.fillRect(x, y, 10, h);
-      const lipH = 18;
-      const lipY = top ? h - lipH : y;
-      ctx.fillStyle = '#43a047';
-      ctx.fillRect(x - 4, lipY, w + 8, lipH);
-      ctx.fillStyle = '#2e7d32';
-      ctx.fillRect(x + w - 2, lipY, 6, lipH);
-    }
-
-    function drawCharacterPreview(x, y, scale, key) {
-      const char = CHARACTERS[key];
+    function drawWing(scale, char) {
       ctx.save();
-      ctx.translate(x, y);
-      if (char.mode === 'image' && sprites[key]?.complete && sprites[key].naturalWidth) {
-        const r = 26 * scale;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        const size = r * 2.25;
-        ctx.drawImage(sprites[key], -size / 2, -size / 2, size, size);
+      const base = scaledPoints(wingBase, scale), inner = scaledPoints(wingInner, scale);
+      drawPolygon(base); ctx.fillStyle = char.wingMain; ctx.fill();
+      drawPolygon(inner); ctx.fillStyle = char.wingLight; ctx.fill();
+      ctx.strokeStyle = char.wingLine; ctx.lineWidth = 2.2 * scale; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-24*scale, -2*scale); ctx.lineTo(4*scale, 10*scale); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-18*scale, -12*scale); ctx.lineTo(-2*scale, -2*scale); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-10*scale, 10*scale); ctx.lineTo(8*scale, 18*scale); ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawCutoutImage(char, scale=1, preview=false) {
+      const img = sprites[char.key];
+      const clip = scaledPoints(char.clip, scale);
+      ctx.save();
+      drawWing(scale, char);
+      drawPolygon(clip); ctx.clip();
+      if (img?.complete && img.naturalWidth) {
+        const size = 88 * scale * char.imageScale;
+        ctx.drawImage(img, -size/2 + (char.imageOffsetX||0)*scale, -size/2 + (char.imageOffsetY||0)*scale, size, size);
       } else {
-        const r = 18 * scale;
-        ctx.fillStyle = char.body || '#ffb703';
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = char.wing || '#fb8500';
-        ctx.beginPath();
-        ctx.ellipse(-4 * scale, 3 * scale, 10 * scale, 6 * scale, -0.4, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = '#ddd'; ctx.fillRect(-40*scale,-40*scale,80*scale,80*scale);
+      }
+      ctx.restore();
+      ctx.save();
+      drawPolygon(clip); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5*scale; ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawCharacterPreview(x,y,scale,key) {
+      const char = CHARACTERS[key]; ctx.save(); ctx.translate(x,y);
+      if (char.mode === 'cutout') drawCutoutImage(char, 0.58*scale, true);
+      else {
+        const r=18*scale; ctx.fillStyle=char.body; ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill(); ctx.fillStyle=char.wing; ctx.beginPath(); ctx.ellipse(-4*scale,3*scale,10*scale,6*scale,-0.4,0,Math.PI*2); ctx.fill();
       }
       ctx.restore();
     }
 
     function drawBird() {
-      const b = state.bird;
-      const char = currentCharacter();
+      const b = state.bird, char = currentCharacter();
       const angle = Math.max(-0.6, Math.min(1.1, b.vy / 10));
-      ctx.save();
-      ctx.translate(b.x, b.y);
-      ctx.rotate(angle);
-
-      if (char.mode === 'image' && sprites[char.key]?.complete && sprites[char.key].naturalWidth) {
-        ctx.fillStyle = 'rgba(255,255,255,.2)';
-        ctx.beginPath();
-        ctx.arc(0, 0, b.r + 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(0, 0, b.r, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        const size = b.r * 2.25;
-        ctx.drawImage(sprites[char.key], -size / 2, -size / 2, size, size);
-        ctx.restore();
-        ctx.fillStyle = 'rgba(255,255,255,.6)';
-        ctx.beginPath();
-        ctx.arc(-8, -9, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = char.wing;
-        ctx.beginPath();
-        ctx.ellipse(-10, 7, 11, 7, -0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = char.beak;
-        ctx.beginPath();
-        ctx.moveTo(b.r - 2, 1);
-        ctx.lineTo(b.r + 13, -4);
-        ctx.lineTo(b.r + 13, 6);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        ctx.fillStyle = char.body;
-        ctx.beginPath();
-        ctx.arc(0, 0, b.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = char.wing;
-        ctx.beginPath();
-        ctx.ellipse(-4, 3, 10, 6, -0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(6, -6, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#111';
-        ctx.beginPath();
-        ctx.arc(8, -6, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = char.beak;
-        ctx.beginPath();
-        ctx.moveTo(14, 0);
-        ctx.lineTo(28, -4);
-        ctx.lineTo(14, 6);
-        ctx.closePath();
-        ctx.fill();
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(angle);
+      if (char.mode === 'cutout') drawCutoutImage(char, 1);
+      else {
+        ctx.fillStyle=char.body; ctx.beginPath(); ctx.arc(0,0,b.r,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=char.wing; ctx.beginPath(); ctx.ellipse(-4,3,10,6,-0.4,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(6,-6,5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(8,-6,2.5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=char.beak; ctx.beginPath(); ctx.moveTo(14,0); ctx.lineTo(28,-4); ctx.lineTo(14,6); ctx.closePath(); ctx.fill();
       }
-
       ctx.restore();
     }
 
-    function drawGround() {
-      ctx.fillStyle = '#ded895';
-      ctx.fillRect(0, H - GROUND_H, W, GROUND_H);
-      ctx.fillStyle = '#b7b16f';
-      ctx.fillRect(0, H - GROUND_H, W, 12);
-      ctx.fillStyle = '#c9c37f';
-      for (let x = -state.groundOffset; x < W + 32; x += 32) {
-        ctx.fillRect(x, H - 56, 16, 8);
-        ctx.fillRect(x + 12, H - 34, 12, 8);
-      }
-    }
-
-    function drawScore() {
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = 'rgba(0,0,0,.25)';
-      ctx.lineWidth = 4;
-      ctx.font = 'bold 48px Arial';
-      ctx.textAlign = 'center';
-      ctx.strokeText(String(state.score), W / 2, 78);
-      ctx.fillText(String(state.score), W / 2, 78);
-    }
-
-    function roundedRect(x, y, w, h, r, fill, stroke = null) {
-      ctx.beginPath();
-      ctx.moveTo(x+r, y);
-      ctx.arcTo(x+w, y, x+w, y+h, r);
-      ctx.arcTo(x+w, y+h, x, y+h, r);
-      ctx.arcTo(x, y+h, x, y, r);
-      ctx.arcTo(x, y, x+w, y, r);
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.fill();
-      if (stroke) {
-        ctx.strokeStyle = stroke;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-    }
+    function drawGround(){ ctx.fillStyle='#ded895'; ctx.fillRect(0,H-GROUND_H,W,GROUND_H); ctx.fillStyle='#b7b16f'; ctx.fillRect(0,H-GROUND_H,W,12); ctx.fillStyle='#c9c37f'; for(let x=-state.groundOffset;x<W+32;x+=32){ ctx.fillRect(x,H-56,16,8); ctx.fillRect(x+12,H-34,12,8);} }
+    function drawScore(){ ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=4; ctx.font='bold 48px Arial'; ctx.textAlign='center'; ctx.strokeText(String(state.score),W/2,78); ctx.fillText(String(state.score),W/2,78); }
+    function roundedRect(x,y,w,h,r,fill,stroke=null){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=2; ctx.stroke(); } }
 
     function drawMenu() {
-      roundedRect(30, 120, W - 60, 350, 24, 'rgba(255,255,255,.86)');
-      ctx.fillStyle = '#123';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 36px Arial';
-      ctx.fillText('Choose your flier', W / 2, 170);
-      ctx.font = '18px Arial';
-      ctx.fillText('Pick a character, then start the game', W / 2, 200);
-
-      state.menuButtons = [];
-      const charKeys = ['bird', 'kelvin', 'cat'];
-      charKeys.forEach((key, i) => {
-        const x = 55 + i * 116;
-        const y = 235;
-        const w = 90;
-        const h = 112;
-        const selected = state.selectedCharacter === key;
-        roundedRect(x, y, w, h, 18, selected ? 'rgba(112,197,206,.28)' : 'rgba(255,255,255,.95)', selected ? '#3a86a8' : 'rgba(0,0,0,.08)');
-        drawCharacterPreview(x + w / 2, y + 42, 0.95, key);
-        ctx.fillStyle = '#123';
-        ctx.font = 'bold 18px Arial';
-        ctx.fillText(CHARACTERS[key].name, x + w / 2, y + 92);
-        state.menuButtons.push({ type: 'character', key, x, y, w, h });
+      roundedRect(30,120,W-60,350,24,'rgba(255,255,255,.86)');
+      ctx.fillStyle='#123'; ctx.textAlign='center'; ctx.font='bold 36px Arial'; ctx.fillText('Choose your flier', W/2, 170);
+      ctx.font='18px Arial'; ctx.fillText('Pick a character, then start the game', W/2, 200);
+      state.menuButtons=[];
+      ['bird','kelvin','cat'].forEach((key,i)=>{
+        const x=55+i*116, y=225, w=90, h=124, selected=state.selectedCharacter===key;
+        roundedRect(x,y,w,h,18,selected?'rgba(112,197,206,.28)':'rgba(255,255,255,.95)',selected?'#3a86a8':'rgba(0,0,0,.08)');
+        drawCharacterPreview(x+w/2, y+44, 1, key);
+        ctx.fillStyle='#123'; ctx.font='bold 18px Arial'; ctx.fillText(CHARACTERS[key].name, x+w/2, y+104);
+        state.menuButtons.push({type:'character', key, x, y, w, h});
       });
-
-      const startBtn = { x: 85, y: 380, w: W - 170, h: 62 };
-      roundedRect(startBtn.x, startBtn.y, startBtn.w, startBtn.h, 18, '#43a047');
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 26px Arial';
-      ctx.fillText('Start Game', W / 2, 420);
-      state.menuButtons.push({ type: 'start', ...startBtn });
+      const startBtn={x:85,y:380,w:W-170,h:62}; roundedRect(startBtn.x,startBtn.y,startBtn.w,startBtn.h,18,'#43a047');
+      ctx.fillStyle='#fff'; ctx.font='bold 26px Arial'; ctx.fillText('Start Game',W/2,420); state.menuButtons.push({type:'start', ...startBtn});
     }
-
     function drawOverlay() {
-      ctx.textAlign = 'center';
-      if (state.mode === 'menu') {
-        drawMenu();
-      }
-      if (state.mode === 'ready') {
-        roundedRect(40, 210, W - 80, 140, 18, 'rgba(255,255,255,.82)');
-        ctx.fillStyle = '#123';
-        ctx.font = 'bold 34px Arial';
-        ctx.fillText(currentCharacter().title, W/2, 258);
-        ctx.font = '20px Arial';
-        ctx.fillText('Tap, click, or press space to start', W/2, 302);
-      }
-      if (state.mode === 'gameover') {
-        roundedRect(50, 190, W - 100, 210, 18, 'rgba(255,255,255,.88)');
-        ctx.fillStyle = '#123';
-        ctx.font = 'bold 34px Arial';
-        ctx.fillText('Game Over', W/2, 238);
-        ctx.font = '24px Arial';
-        ctx.fillText(`Score: ${state.score}`, W/2, 284);
-        ctx.fillText(`Best: ${state.best}`, W/2, 318);
-        ctx.font = '18px Arial';
-        ctx.fillText('Tap / click / space to restart', W/2, 352);
-        ctx.fillText('Character select is available on reload', W/2, 380);
-      }
+      ctx.textAlign='center';
+      if (state.mode==='menu') drawMenu();
+      if (state.mode==='ready') { roundedRect(40,210,W-80,140,18,'rgba(255,255,255,.82)'); ctx.fillStyle='#123'; ctx.font='bold 34px Arial'; ctx.fillText(currentCharacter().title,W/2,258); ctx.font='20px Arial'; ctx.fillText('Tap, click, or press space to start',W/2,302); }
+      if (state.mode==='gameover') { roundedRect(50,190,W-100,210,18,'rgba(255,255,255,.88)'); ctx.fillStyle='#123'; ctx.font='bold 34px Arial'; ctx.fillText('Game Over',W/2,238); ctx.font='24px Arial'; ctx.fillText(`Score: ${state.score}`,W/2,284); ctx.fillText(`Best: ${state.best}`,W/2,318); ctx.font='18px Arial'; ctx.fillText('Tap / click / space to restart',W/2,352); ctx.fillText('Character select is available on reload',W/2,380); }
     }
+    function draw(){ drawBackground(); drawPipes(); drawGround(); if(state.mode!=='menu') drawBird(); if(state.mode==='playing') drawScore(); drawOverlay(); }
+    function handleMenuClick(px,py){ for(const btn of state.menuButtons){ if(px>=btn.x&&px<=btn.x+btn.w&&py>=btn.y&&py<=btn.y+btn.h){ if(btn.type==='character'){ setCharacter(btn.key); return true; } if(btn.type==='start'){ reset(false); startGame(); return true; }}} return false; }
 
-    function draw() {
-      drawBackground();
-      drawPipes();
-      drawGround();
-      if (state.mode !== 'menu') drawBird();
-      if (state.mode === 'playing') drawScore();
-      drawOverlay();
-    }
-
-    function handleMenuClick(px, py) {
-      for (const btn of state.menuButtons) {
-        if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
-          if (btn.type === 'character') {
-            setCharacter(btn.key);
-            return true;
-          }
-          if (btn.type === 'start') {
-            reset(false);
-            startGame();
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    let last = performance.now();
-    function loop(now) {
-      const dt = Math.min(40, now - last);
-      last = now;
-      update(dt);
-      draw();
-      requestAnimationFrame(loop);
-    }
-
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (state.mode === 'menu') {
-          reset(false);
-          startGame();
-        } else {
-          flap();
-        }
-      }
-      if (state.mode === 'menu') {
-        if (e.key === '1') setCharacter('bird');
-        if (e.key === '2') setCharacter('kelvin');
-        if (e.key === '3') setCharacter('cat');
-      }
-    });
-
-    canvas.addEventListener('pointerdown', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const px = (e.clientX - rect.left) * (canvas.width / rect.width);
-      const py = (e.clientY - rect.top) * (canvas.height / rect.height);
-      if (state.mode === 'menu') {
-        handleMenuClick(px, py);
-        return;
-      }
-      flap();
-    });
-
-    reset(true);
-    requestAnimationFrame(loop);
+    let last=performance.now();
+    function loop(now){ const dt=Math.min(40, now-last); last=now; update(dt); draw(); requestAnimationFrame(loop); }
+    window.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); if(state.mode==='menu'){ reset(false); startGame(); } else flap(); } if(state.mode==='menu'){ if(e.key==='1')setCharacter('bird'); if(e.key==='2')setCharacter('kelvin'); if(e.key==='3')setCharacter('cat'); }});
+    canvas.addEventListener('pointerdown',e=>{ const rect=canvas.getBoundingClientRect(); const px=(e.clientX-rect.left)*(canvas.width/rect.width); const py=(e.clientY-rect.top)*(canvas.height/rect.height); if(state.mode==='menu'){ handleMenuClick(px,py); return; } flap(); });
+    reset(true); requestAnimationFrame(loop);
   </script>
 </body>
 </html>
